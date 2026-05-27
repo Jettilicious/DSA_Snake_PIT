@@ -22,6 +22,14 @@ Color Apple = RED;
 Color darkGreen = {86, 102, 48, 255};
 Color darkRed = {139, 0, 0, 255};
 
+Music bgm;
+Sound eatSFX;
+Sound crashSFX;
+Sound slowSFX;
+Sound fastSFX;
+Sound wallWarning;
+Sound reverseSFX;
+
 bool paused = false;
 bool running = true;
 
@@ -272,7 +280,7 @@ void DeleteRear(Deque* deque);
 void DeleteFront(Deque* deque);
 void DrawSnake(Snake* snake);
 void MoveSnakeUpdate(Snake* snake);
-void Reset(Snake* snake);
+void Reset();
 void AnimGameOver(TextPop* textpop);
 void Link_Clear(struct FoodNode** head);
 void Link_Dele_End(struct FoodNode** head);
@@ -314,11 +322,25 @@ void Game_Paused(){
     }
 }
 
+
+
 int main(void)
 {   
     //Window
     SetConfigFlags(FLAG_WINDOW_TOPMOST);
     InitWindow(2* OFFSET + CELL_SIZE*CELL_COUNT, 2* OFFSET + CELL_SIZE*CELL_COUNT, "DSA Snake Game");
+    InitAudioDevice();
+
+    //Music
+    bgm = LoadMusicStream("Snake Resources/Music/Ts Pmo.mp3");
+    eatSFX = LoadSound("Snake Resources/Sfx/Snake Eat Food.wav");
+    crashSFX = LoadSound("Snake Resources/Sfx/Crash.wav");
+    slowSFX = LoadSound("Snake Resources/Sfx/Za Applo.wav");
+    fastSFX = LoadSound("Snake Resources/Sfx/Food In Heaven.wav");
+    wallWarning = LoadSound("Snake Resources/Sfx/Wall Warning.mp3");
+    reverseSFX = LoadSound("Snake Resources/Sfx/Boom.mp3");
+    PlayMusicStream(bgm);
+
     SetWindowFocused();
     SetTargetFPS(60);
 
@@ -356,12 +378,16 @@ int main(void)
         if(IsKeyPressed(KEY_P)){
             paused = true;
         }
+        if(IsKeyPressed(KEY_SPACE)){
+            PlaySound(wallWarning);
+        }
         
 
 
         // Update Positions
         if(running){
             if(!paused){
+                UpdateMusicStream(bgm);
                 if(eventTrigger(gameInterval)){
                 if(Input.size > 0){
                     Vector2 next = Input_Dequeue(&Input);
@@ -390,6 +416,9 @@ int main(void)
                     reversedTimer--;
                     if(reversedTimer == 0){
                         reversed = false;
+                        snake.direction.x *= -1;
+                        snake.direction.y *= -1;
+                        Init_Input(&Input);
                     }
                 }
                 struct FoodNode* eaten = Check_Food_Collision_V2(head, &snake);
@@ -423,8 +452,14 @@ int main(void)
             Game_Paused();
         EndDrawing();
     }
+    UnloadMusicStream(bgm);
+    UnloadSound(eatSFX);
+    UnloadSound(crashSFX);
+    UnloadSound(slowSFX);
+    UnloadSound(fastSFX);
+    UnloadSound(wallWarning);
+    CloseAudioDevice();
     CloseWindow();
-
     return 0;
 }
 
@@ -647,6 +682,7 @@ void Show_Wall(WallPattern* wall){
             pendingWall = actualWalls[i];
             flashWallTimer = 3.0;
             isWallFlashing = true;
+            PlaySound(wallWarning);
             return;
         }
     }
@@ -753,7 +789,6 @@ void Link_Dele_Node(struct FoodNode** head, struct FoodNode* target){
     walker->next = target->next;
     free(target);
 }
-
 //Linked List End-----------------------------------------
 
 //Collisions And Spawning-------------------------------------------------------------------------------
@@ -846,6 +881,7 @@ bool Check_Food_In_Food(FoodNode* head, Vector2 point){
 void Apply_Food_Effect(struct FoodNode* food, Snake* snake, TextPop* textpop){
     switch(food->type){
         case NormalFood:
+            PlaySound(eatSFX);
             snake->growSnake = 1;
             snake->score += 1 * scoreMulti;
             if(snake->score >= nextWallScore){
@@ -858,6 +894,9 @@ void Apply_Food_Effect(struct FoodNode* food, Snake* snake, TextPop* textpop){
             textpop->index = GetRandomValue(0, 11);
             break;
         case ZaApplo:
+            if(!IsSoundPlaying(slowSFX)){
+                PlaySound(slowSFX);
+            }
             snake->growSnake = 1;
             gameInterval = 0.30;
             snake->score += 1 * scoreMulti;
@@ -871,6 +910,9 @@ void Apply_Food_Effect(struct FoodNode* food, Snake* snake, TextPop* textpop){
             textpop->type = ZaApplo;
             break;
         case FoodInHeaven:
+            if(!IsSoundPlaying(fastSFX)){
+                PlaySound(fastSFX);
+            }
             gameInterval = 0.12;
             snake->score += 1 * scoreMulti;
             if(snake->score >= nextWallScore){
@@ -883,6 +925,7 @@ void Apply_Food_Effect(struct FoodNode* food, Snake* snake, TextPop* textpop){
             textpop->type = FoodInHeaven;
             break;
         case BigApple:
+            PlaySound(eatSFX);
             snake->growSnake = 3;
             snake->score += 3 * scoreMulti;
             if(snake->score >= nextWallScore){
@@ -894,6 +937,7 @@ void Apply_Food_Effect(struct FoodNode* food, Snake* snake, TextPop* textpop){
             textpop->type = BigApple;
             break;
         case Minimize:
+            PlaySound(eatSFX);
             if(snake->body.size > 5){
                 int removeCount = 4 * scoreMulti;
                 for(int i = 0; i < removeCount; i++){
@@ -913,6 +957,7 @@ void Apply_Food_Effect(struct FoodNode* food, Snake* snake, TextPop* textpop){
             textpop->type = Minimize;
             break;
         case FoodRush:
+            PlaySound(eatSFX);
             snake->growSnake = 1;
             if(scoreMulti >= 2){
                 scoreMulti += 2;
@@ -931,6 +976,7 @@ void Apply_Food_Effect(struct FoodNode* food, Snake* snake, TextPop* textpop){
             textpop->type = FoodRush;
             break;
         case Reverse:
+            PlaySound(reverseSFX);
             snake->growSnake = 1;
             snake->score += 1 * scoreMulti;
             if(snake->score >= nextWallScore){
@@ -1032,28 +1078,35 @@ void UpdateTextPop(TextPop* textpop){
     }
 }
 
-void Reset(Snake* snake){
-    *snake = MakeSnake();
-
-}
-
-void GameOver(Snake* snake, struct FoodNode** food, WallPattern* wall){
+void Reset(){
     running = false;
     paused = false;
-    textpop.active = false;
-    snake->score = 0;
-    Reset(snake);
     speedTimer = 0;
     gameInterval = 0.2;
     scoreMulti = 1;
     scoreMultiTimer = 0;
-    wall->activeWalls = 0;
     nextWallScore = wallScoreAdd;
     pendingWall = -1;
     flashWallTimer = 0;
     isWallFlashing = false;
     reversed = false;
     reversedTimer = 0;
+    StopMusicStream(bgm);
+    PlayMusicStream(bgm);
+}
+
+void GameOver(Snake* snake, struct FoodNode** food, WallPattern* wall){
+    if(IsSoundPlaying(wallWarning)){
+        StopSound(wallWarning);
+    }
+    if(!IsSoundPlaying(crashSFX)){
+        PlaySound(crashSFX);
+    }
+    textpop.active = false;
+    snake->score = 0;
+    *snake = MakeSnake();
+    Reset();
+    wall->activeWalls = 0;
     Link_Clear(food);
     for(int i = 0; i < 4; i++){
         SpawnFood(food, snake, wall);
